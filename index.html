@@ -10,9 +10,10 @@
       var context;
       var drawing;
       var dragging;
+      var rendered;
       function draw()
       {
-        if (drawing || dragging){ return; }
+        if (drawing || dragging || rendered){ return; }
         drawing = true;
         var my_root = getBiggestChange(root).node;
         makeChildren(my_root);
@@ -38,6 +39,42 @@
       {
         context.fillStyle = node.color;
         context.fillRect(node.scr.x,node.scr.y,node.scr.w,node.scr.h);
+      }
+      function render(e)
+      {
+        rendered = true;
+        dragging = false;
+        if (drawing) {
+          setTimeout(render, 0);
+          return;
+        }
+        root.children = [];
+        var pixelSetWidth = root.set.w / canvas.width;
+        var pixelSetHeight = root.set.h / canvas.height;
+        for (var x = 0; x < canvas.width; x++) {
+          for (var y = 0; y < canvas.height; y++) {
+            var newChild = {
+              set: {
+                x: bounds.rmin + pixelSetWidth * x,
+                y: bounds.imin + pixelSetHeight * y,
+                w: pixelSetWidth,
+                h: pixelSetHeight
+              },
+              scr: {
+                x: x,
+                y : y,
+                w: 1,
+                h: 1
+              },
+              children: null,
+              parent: root
+            };
+            newChild.eVal = escapeValue(newChild);
+            newChild.color = toRGB(interpColor({min:2, max:max_escape}, newChild.eVal));
+            drawNode(newChild);
+          }
+        }
+        return false;
       }
 
       function interesting(node,parent)
@@ -366,6 +403,8 @@
       }
       function stopDrag(e)
       {
+        if (!dragging) {return;}
+        rendered = false;
         var canvas = document.getElementById("canvas");
         var d = {x:e.clientX-mouseStart.x,y:e.clientY-mouseStart.y}
         var exp = {x:((bounds.rmax-bounds.rmin)/canvas.width),
@@ -389,6 +428,7 @@
         canvas = document.getElementById("canvas");
         canvas.onmousedown = startDrag;
         canvas.onmouseup = stopDrag;
+        canvas.onkeydown = render;
         canvas.width = this.innerWidth - 24;
         canvas.height = this.innerHeight - 24;
         context = canvas.getContext('2d');
@@ -419,5 +459,6 @@
  </head>
  <body onload="init();">
    <canvas id="canvas" width="150" height="150"></canvas>
+   <a href="#" onmousedown="render();" style="position: absolute; top: 15px; left: 15px; text-color: ">Render</a>
  </body>
 </html>
