@@ -1,0 +1,426 @@
+<html>
+ <head>
+  <script type="application/x-javascript">
+      var bounds = {rmin:-2,rmax:1,imin:-1,imax:1};
+      var mouseStart = {x:-1,y:-1};
+      var pixels = {xnum:600,ynum:400}
+      var max_escape = 32;
+      var neighbor_focus = 10;
+      var root;
+      var canvas;
+      var context;
+      var drawing;
+      var dragging;
+      function draw()
+      {
+        if (drawing || dragging){ return; }
+        drawing = true;
+        var my_root = getBiggestChange(root).node;
+        makeChildren(my_root);
+        if (my_root.children)
+        {
+          context.fillStyle = "rgb(0,0,0)";
+          context.fillRect(my_root.scr.x,my_root.scr.y,my_root.scr.w,my_root.scr.h);
+          for (var i = 0; i < my_root.children.length; i++)
+          {
+            drawNode(my_root.children[i]);
+          }
+        }
+        else
+        {
+          for (var i = 0; i < my_root.parent.children.length; i++)
+            if (my_root.parent.children[i] == my_root)
+            {
+              my_root.parent.children.splice(i,1);
+              i--;
+            }
+        }
+        drawing = false;
+      }
+      function drawNode(node)
+      {
+        context.fillStyle = node.color;
+        context.fillRect(node.scr.x,node.scr.y,node.scr.w,node.scr.h);
+      }
+
+      function interesting(node,parent)
+      {
+        var nodeVal = node.eVal == -1 ? max_escape+1 : node.eVal;
+        var pVal = parent.eVal == -1 ? max_escape+1 : parent.eVal;
+        if (nodeVal == pVal)
+          return nodeVal / max_escape;
+        return (pVal - nodeVal)*(pVal - nodeVal)
+      }
+      function getBiggestChange(root)
+      {
+        var mySize = root.scr.w * root.scr.h;
+        if (!root.children)
+          return {node:root,size:mySize};
+        var interest, limit;
+        var myVal = root.eVal;
+        var firstChild = parseInt(Math.random() * 1000);
+        for (var i = 0; i < root.children.length; i++)
+        {
+          var recur = getBiggestChange(
+            root.children[(firstChild + i) % root.children.length]);
+          if (recur.diff == null)
+          {
+            return {diff:interesting(recur.node,root),
+              node:recur.node,
+              size:recur.size};
+          }
+          else
+          {
+            if (!limit){ limit={min:recur,max:recur};}
+            if (recur.size<limit.min.size){ limit.min=recur; }
+            if (recur.size>limit.max.size){ limit.max=recur; }
+
+            recur.diff /= neighbor_focus;
+            if (!interest ||
+              !fertile(interest.node) ||
+              recur.diff > interest.diff)
+            { interest=recur; }
+          }
+        }
+        return (limit.max.size < limit.min.size * 4096) ? interest : limit.max;
+      }
+
+      function fertile(node)
+      { return node.scr.w > 1 && node.scr.h > 1; }
+      function setToscr(set)
+      {
+        var scale = {
+          x:(canvas.width / (bounds.rmax-bounds.rmin)),
+          y:(canvas.height / (bounds.imax-bounds.imin))
+        }
+        return {
+          x:parseInt((set.x-bounds.rmin) * scale.x),
+          y:parseInt((set.y-bounds.imin) * scale.y),
+          w:parseInt(set.w * scale.x),
+          h:parseInt(set.h * scale.y)
+        }
+      }
+      function makeChildren(root)
+      {
+        var xDiv,yDiv;
+        xDiv = {set:null,scr:null};
+        yDiv = {set:null,scr:null};
+        xDiv.set = root.set.x+(root.set.w/2);
+        if (root.scr.w >= 2)
+        {
+          xDiv.scr = parseInt(root.scr.x+(root.scr.w/2));
+          xDiv.minW = xDiv.scr-root.scr.x;
+          xDiv.maxW = root.scr.w-xDiv.minW;
+        }
+        yDiv.set = root.set.y+(root.set.h/2);
+        if (root.scr.h >= 2)
+        {
+          yDiv.scr = parseInt(root.scr.y+(root.scr.h/2));
+          yDiv.minH = yDiv.scr-root.scr.y;
+          yDiv.maxH = root.scr.h-yDiv.minH;
+        }
+        if (xDiv.scr || yDiv.scr)
+        { root.children = new Array(); }
+
+        if (xDiv.scr && yDiv.scr)
+        {
+          root.children[0] = 
+            {
+              scr:{
+                x:root.scr.x,
+                y:root.scr.y,
+                w:xDiv.minW,
+                h:yDiv.minH
+              },
+              set:{
+                x:root.set.x,
+                y:root.set.y,
+                w:xDiv.set-root.set.x,
+                h:yDiv.set-root.set.y,
+              }
+            };
+          root.children[1] = 
+            {
+              scr:{
+                x:xDiv.scr,
+                y:root.scr.y,
+                w:xDiv.maxW,
+                h:yDiv.minH
+              },
+              set:{
+                x:xDiv.set,
+                y:root.set.y,
+                w:xDiv.set-root.set.x,
+                h:yDiv.set-root.set.y,
+              }
+            };
+          root.children[2] = 
+            {
+              scr:{
+                x:root.scr.x,
+                y:yDiv.scr,
+                w:xDiv.minW,
+                h:yDiv.maxH
+              },
+              set:{
+                x:root.set.x,
+                y:yDiv.set,
+                w:xDiv.set-root.set.x,
+                h:yDiv.set-root.set.y,
+              }
+            };
+          root.children[3] = 
+            {
+              scr:{
+                x:xDiv.scr,
+                y:yDiv.scr,
+                w:xDiv.maxW,
+                h:yDiv.maxH
+              },
+              set:{
+                x:xDiv.set,
+                y:yDiv.set,
+                w:xDiv.set-root.set.x,
+                h:yDiv.set-root.set.y,
+              }
+            };
+        }
+        if (xDiv.scr && !yDiv.scr)
+        {
+          root.children[0] = 
+            {
+              scr:{
+                x:root.scr.x,
+                y:root.scr.y,
+                w:xDiv.minW,
+                h:root.scr.h
+              },
+              set:{
+                x:xDiv.set,
+                y:yDiv.set,
+                w:xDiv.set-root.set.x,
+                h:yDiv.set-root.set.y,
+              }
+            };
+          root.children[1] = 
+            {
+              scr:{
+                x:xDiv.scr,
+                y:root.scr.y,
+                w:xDiv.maxW,
+                h:root.scr.h
+              },
+              set:{
+                x:xDiv.set,
+                y:yDiv.set,
+                w:xDiv.set-root.set.x,
+                h:yDiv.set-root.set.y,
+              }
+            };
+        }
+        if (!xDiv.scr && yDiv.scr)
+        {
+          root.children[0] = 
+            {
+              scr:{
+                x:root.scr.x,
+                y:root.scr.y,
+                w:root.scr.w,
+                h:yDiv.minH
+              },
+              set:{
+                x:xDiv.set,
+                y:yDiv.set,
+                w:xDiv.set-root.set.x,
+                h:yDiv.set-root.set.y,
+              }
+            };
+          root.children[1] = 
+            {
+              scr:{
+                x:root.scr.x,
+                y:yDiv.scr,
+                w:root.scr.w,
+                h:yDiv.maxH
+              },
+              set:{
+                x:xDiv.set,
+                y:yDiv.set,
+                w:xDiv.set-root.set.x,
+                h:yDiv.set-root.set.y,
+              }
+            };
+        }
+        if (xDiv.scr || yDiv.scr)
+        {
+          for (var i = 0; i < root.children.length; i++)
+          {
+            var child = root.children[i];
+            child.eVal = escapeValue(child);
+            child.color = toRGB(interpColor({min:2,max:max_escape},child.eVal));
+            child.children = null;
+            child.parent = root;
+          }
+          reAverage(root);
+        }
+        else
+        {
+          root.parent.children = null;
+        }
+      }
+      function reAverage(node)
+      {
+        if (node.children == null)
+        { return; }
+        node.eVal = 0;
+        for (var i = 0; i < node.children.length; i++)
+          node.eVal += node.children[i].eVal;
+        node.eVal /= node.children.length;
+        if (node.parent == null)
+        { return; }
+        reAverage(node.parent);
+      }
+
+      function escapeValue(node)
+      {
+        return escapeItr(
+         {real:node.set.x+(node.set.w/2),imaginary:node.set.y+(node.set.h/2)},
+         {real:0,imaginary:0},2,0,max_escape);
+      }
+      function escapeItr(c,z,l,s,sl)
+      {
+        z = add(mult(z,z),c);
+        if (z.real > l ||
+          z.real < -l ||
+          z.imaginary > l ||
+          z.imaginary < -l)
+        {
+          return escapeVal(s,z);
+        }
+        if (++s > sl){return -1;}
+        return escapeItr(c,z,l,s,sl);
+      }
+
+      function escapeVal(n,z)
+      {
+        var testing = (z.real * z.real + z.imaginary * z.imaginary) / 16;
+        if (testing > 16){ alert(testing);}
+        return n + 1 - (testing/2); //this is in no way correct.
+  //I would like to appologize to any math offended 
+        //by the pursuit of pretty gradiants
+        //for the record, it should be n + 1 - ln(ln (z) / ln 2)/ ln 2
+      }
+
+      function add(x,y)
+      {
+        return {
+          real:x.real+y.real,
+          imaginary:x.imaginary+y.imaginary
+        };
+      }
+      function mult(x,y)
+      {
+        var f = x.real * y.real;
+        var i = x.real * y.imaginary;
+        var o = x.imaginary * y.real;
+        var l = x.imaginary * y.imaginary;
+        return {real:f-l,imaginary:i+o};
+      }
+
+      function toRGB(color)
+      { return "rgb("+color.R+","+color.G+","+color.B+")"; }
+      function interpColor(bound,v)
+      {
+        if (v < bound.min || v > bound.max)
+          return {R:0,G:0,B:0};
+        var d = v % ((bound.max-bound.min) / 12);
+        var q = (v-d) / ((bound.max-bound.min)/12);
+        d = parseInt(d * (255 * 12 / (bound.max-bound.min)));
+        switch (q)
+        {
+          case 0: return {B:255,R:255-d,G:255};
+          case 1: return {B:255,R:0,G:255-d};
+          case 2: return {B:255,R:d,G:0};
+          case 3: return {B:255-d,R:255,G:0};
+          case 4: return {B:0,R:255,G:d};
+          case 5: return {B:0,R:255-d,G:255};
+          case 6: return {B:d,R:0,G:255};
+          case 7: return {B:255,R:0,G:255-d};
+          case 8: return {B:255-d,R:d,G:0};
+          case 9: return {B:0,R:255-d,G:d};
+          case 10: return {B:d,R:0,G:255-d};
+          case 11: return {B:255-d,R:0,G:0};
+          case 12: return {B:255,R:255,G:255};
+
+//          case 0: return {R:d,G:0,B:0};
+//          case 1: return {R:255,G:d,B:0};
+//          case 2: return {R:255-d,G:255,B:0};
+//          case 3: return {R:0,G:255,B:d};
+//          case 4: return {R:0,G:255-d,B:255};
+//          case 5: return {R:0,G:0,B:255-d};
+        }
+        return {R:0,G:0,B:0};
+      }
+
+      function startDrag(e)
+      {
+        dragging = true;
+        mouseStart = {x:e.clientX,y:e.clientY};
+      }
+      function stopDrag(e)
+      {
+        var canvas = document.getElementById("canvas");
+        var d = {x:e.clientX-mouseStart.x,y:e.clientY-mouseStart.y}
+        var exp = {x:((bounds.rmax-bounds.rmin)/canvas.width),
+                    y:((bounds.imax-bounds.imin)/canvas.height)};
+        d = {x:d.x*exp.x,y:d.y*exp.y};
+        var low = {x:e.clientX<mouseStart.x?
+                    e.clientX:mouseStart.x,
+                   y:e.clientY<mouseStart.y?
+                    e.clientY:mouseStart.y};
+        low = {x:low.x*exp.x,y:low.y*exp.y};
+        bounds = {rmin:low.x+bounds.rmin,
+                   rmax:low.x+d.x+bounds.rmin,
+                   imin:low.y+bounds.imin,
+                   imax:low.y+d.y+bounds.imin};
+        max_escape *= 2;
+        init();
+      }
+
+      function init()
+      {
+        canvas = document.getElementById("canvas");
+        canvas.onmousedown = startDrag;
+        canvas.onmouseup = stopDrag;
+        canvas.width = this.innerWidth - 24;
+        canvas.height = this.innerHeight - 24;
+        context = canvas.getContext('2d');
+        context.fillStyle = "rgb(0,0,0)";
+        context.fillRect(0,0,canvas.width, canvas.height);
+        root = {
+                 scr:{
+                   x:0,
+                   y:0,
+                   w:canvas.width,
+                   h:canvas.height
+                 },
+                 set:{
+                   x:bounds.rmin,
+                   y:bounds.imin,
+                   w:bounds.rmax-bounds.rmin,
+                   h:bounds.imax-bounds.imin
+                 },
+                 eVal:0,
+                 color:"rgb(0,0,0)",
+                 children:null
+               };
+        drawing = false;
+        dragging = false;
+        setInterval("draw()",1);
+      }
+  </script>
+ </head>
+ <body onload="init();">
+   <canvas id="canvas" width="150" height="150"></canvas>
+ </body>
+</html>
