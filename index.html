@@ -19,8 +19,6 @@
         makeChildren(my_root);
         if (my_root.children)
         {
-          context.fillStyle = "rgb(0,0,0)";
-          context.fillRect(my_root.scr.x,my_root.scr.y,my_root.scr.w,my_root.scr.h);
           for (var i = 0; i < my_root.children.length; i++)
           {
             drawNode(my_root.children[i]);
